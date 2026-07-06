@@ -1,5 +1,6 @@
 # DevKit UI
-[![Unity Version](https://img.shields.io/badge/Unity-2023.3+-blue.svg)](https://unity.com/)  
+[![Unity Version](https://img.shields.io/badge/Unity-2023.3+-blue.svg)](https://unity.com/)
+[![Size](https://img.shields.io/github/repo-size/Quaximur/DevKit.UI?label=Size&color=blue)](https://github.com/Quaximur/DevKit.UI)    
 Minimalist MVVM library for Unity.    
 
 🫧Overwhelmingly Neat;    
