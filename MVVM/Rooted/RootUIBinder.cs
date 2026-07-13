@@ -7,18 +7,18 @@ using UnityEngine.UIElements;
 namespace DevKit.UI.MVVM
 {
     /// <summary>
-    /// Root UI Object with Canvas and UIDocument layers sorting and Object pooling implementation.
+    /// Root UI Object with sorted Canvas and UIDocument layers and Object pooling.
     /// </summary>
     public class RootUIBinder : MonoBehaviour, IRootUIBinder, IRootUI
     {
         [SerializeField] private Transform _layersRoot;
-        
+
         [Header("UIDocument Pool"), Space(4)]
         [SerializeField] private UIDocument _documentPrefab;
         [SerializeField] private PanelSettings _panelSettingsAsset;
         [SerializeField, Min(0)] private int _maxUIDocuments = 10;
         [SerializeField, Min(0)] private int _defaultUIDocuments = 1;
-        
+
         [Header("Canvas Pool"), Space(4)]
         [SerializeField] private Canvas _canvasPrefab;
         [SerializeField, Min(0)] private int _maxCanvases = 10;
@@ -27,13 +27,14 @@ namespace DevKit.UI.MVVM
         private readonly HashSet<IAttachableView> _boundViews = new();
         private ObjectPool<UIDocument> _documentPool;
         private ObjectPool<Canvas> _canvasPool;
-        private readonly Dictionary<float, Canvas> _canvasLayersMap = new();
+        private readonly Dictionary<int, Canvas> _canvasLayersMap = new();
         private readonly Dictionary<float, UIDocument> _documentLayersMap = new();
         private readonly Dictionary<GameObject, Canvas> _canvasViewParentMap = new();
         private readonly Dictionary<VisualElement, UIDocument> _documentViewParentMap = new();
+        private readonly HashSet<Canvas> _activeCanvases = new();
         private readonly HashSet<UIDocument> _activeDocuments = new();
 
-#region MonoBehaviour
+        #region MonoBehaviour
         private void Awake()
         {
             _documentPool = new ObjectPool<UIDocument>(
@@ -67,9 +68,9 @@ namespace DevKit.UI.MVVM
             _documentPool?.Clear();
             _canvasPool?.Clear();
         }
-#endregion
+        #endregion
 
-#region IRootUIBinder
+        #region IRootUIBinder
         public void SetView(IAttachableView view)
         {
             ClearViews();
@@ -108,7 +109,7 @@ namespace DevKit.UI.MVVM
 
         public void ClearView(IAttachableView view)
         {
-            view?.Detach(this);
+            view.Detach(this);
             _boundViews.Remove(view);
         }
 
@@ -117,9 +118,9 @@ namespace DevKit.UI.MVVM
             foreach (var view in _boundViews.ToArray())
                 ClearView(view);
         }
-#endregion
+        #endregion
 
-#region IRootUI
+        #region IRootUI
         /// <summary>
         /// This is only used by UI Toolkit Views in terms of implementation Visitor pattern. 
         /// For the scene UI binding use SetViews or AddViews method instead.
@@ -135,13 +136,29 @@ namespace DevKit.UI.MVVM
                 _documentLayersMap.Add(sortOrder, document);
             }
 
-            if (!_documentViewParentMap.TryAdd(visualElement, document))
+            if (_documentViewParentMap.TryGetValue(visualElement, out var oldParentDocument))
             {
-                Debug.LogWarning($"<color=#FF8F5C>Reattaching VisualElement '{visualElement.name}'</color>");
+                // reattaching existing UI
+                visualElement.RemoveFromHierarchy(); // mb for event dispatch?
+
+                document.rootVisualElement.Add(visualElement);
+                _documentViewParentMap[visualElement] = document;
+
+                // release the parent if needed
+                if (oldParentDocument.rootVisualElement.childCount == 0)
+                {
+                    _documentLayersMap.Remove(oldParentDocument.panelSettings.sortingOrder);
+                    if (_activeDocuments.Remove(oldParentDocument))
+                        _documentPool.Release(oldParentDocument);
+                    else
+                        Debug.LogWarning($"<color=#FF8F5C>UIDocument repeated releasing detected</color>");
+                }
+            }
+            else
+            {
+                document.rootVisualElement.Add(visualElement);
                 _documentViewParentMap[visualElement] = document;
             }
-
-            document.rootVisualElement.Add(visualElement);
         }
 
         /// <summary>
@@ -155,28 +172,40 @@ namespace DevKit.UI.MVVM
             {
                 canvas = _canvasPool.Get();
                 canvas.sortingOrder = sortOrder;
+                _activeCanvases.Add(canvas);
 
                 _canvasLayersMap.Add(sortOrder, canvas);
             }
 
-            if (!_canvasViewParentMap.TryAdd(gameObjectUI, canvas))
+            if (_canvasViewParentMap.TryGetValue(gameObjectUI, out var oldParentCanvas))
             {
-                Debug.LogWarning($"<color=#FF8F5C>Reattaching GameObject '{gameObjectUI.name}'</color>");
+                // reattaching existing UI
+                gameObjectUI.transform.SetParent(canvas.transform, false);
+                _canvasViewParentMap[gameObjectUI] = canvas;
+
+                if (oldParentCanvas.transform.childCount == 0)
+                {
+                    _canvasLayersMap.Remove(oldParentCanvas.sortingOrder);
+                    if (_activeCanvases.Remove(oldParentCanvas))
+                        _canvasPool.Release(oldParentCanvas);
+                    else
+                        Debug.LogWarning($"<color=#FF8F5C>Canvas repeated releasing detected</color>");
+                }
+            }
+            else
+            {
+                gameObjectUI.transform.SetParent(canvas.transform, false);
                 _canvasViewParentMap[gameObjectUI] = canvas;
             }
-
-            gameObjectUI.transform.SetParent(canvas.transform, false);
         }
 
         void IRootUI.Detach(VisualElement visualElement)
         {
             visualElement.RemoveFromHierarchy();
-            
+
             if (_documentViewParentMap.TryGetValue(visualElement, out var document))
             {
                 _documentViewParentMap.Remove(visualElement);
-                // FLogger.LogGood(
-                //     $"Detaching '{visualElement[0].name}, childCount: {document.rootVisualElement.childCount}', sortOrder: {document.panelSettings.sortingOrder}");
 
                 if (document.rootVisualElement.childCount == 0)
                 {
@@ -191,17 +220,26 @@ namespace DevKit.UI.MVVM
 
         void IRootUI.Detach(GameObject gameObjectUI)
         {
-            if (_canvasViewParentMap.TryGetValue(gameObjectUI, out var canvas) &&
-                canvas.transform.childCount == 1)
+            var shouldReleaseCanvas = false;
+            if (_canvasViewParentMap.TryGetValue(gameObjectUI, out var canvas))
             {
-                _canvasLayersMap.Remove(canvas.sortingOrder);
                 _canvasViewParentMap.Remove(gameObjectUI);
-
-                _canvasPool.Release(canvas);
+                if (canvas.transform.childCount == 1)
+                    shouldReleaseCanvas = true;
             }
 
-            Destroy(gameObjectUI);
+            if (gameObjectUI != null)
+                Destroy(gameObjectUI);
+
+            if (shouldReleaseCanvas)
+            {
+                _canvasLayersMap.Remove(canvas.sortingOrder);
+                if (_activeCanvases.Remove(canvas))
+                    _canvasPool.Release(canvas);
+                else
+                    Debug.LogWarning($"<color=#FF8F5C>Canvas repeated releasing detected</color>");
+            }
         }
-#endregion
+        #endregion
     }
 }

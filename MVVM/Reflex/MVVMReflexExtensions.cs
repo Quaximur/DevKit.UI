@@ -25,6 +25,7 @@ namespace DevKit.UI.MVVM
                 viewModelLifetime, 
                 binderLifetime);
         }
+        
         public static ContainerBuilder RegisterMVVM<TView, TViewModel, TBinder>(this ContainerBuilder builder,
             TView viewPrefab, 
             Func<Container, TViewModel> viewModelFactory = null,
