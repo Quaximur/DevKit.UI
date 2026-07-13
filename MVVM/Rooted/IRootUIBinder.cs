@@ -3,7 +3,7 @@ using System.Collections.Generic;
 namespace DevKit.UI.MVVM
 {
     /// <summary>
-    /// Template for Root UI object that holds child Views.
+    /// COntract for Root UI object that holds child Views.
     /// </summary>
     public interface IRootUIBinder
     {

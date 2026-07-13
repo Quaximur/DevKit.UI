@@ -1,5 +1,3 @@
-using System;
-
 namespace DevKit.UI.MVVM.Bases
 {
     public abstract class AttachBinder<TView, TViewModel> : AttachBinder<TView, TViewModel, TViewModel>
