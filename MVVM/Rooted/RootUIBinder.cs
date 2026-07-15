@@ -213,25 +213,20 @@ namespace DevKit.UI.MVVM
                     if (_activeDocuments.Remove(document))
                         _documentPool.Release(document);
                     else
-                        Debug.LogWarning($"<color=#FF8F5C>Multiple UIDocument release detected</color>");
+                        Debug.LogWarning($"<color=#FF8F5C>UIDocument repeated releasing detected</color>");
                 }
             }
         }
 
         void IRootUI.Detach(GameObject gameObjectUI)
         {
-            var shouldReleaseCanvas = false;
             if (_canvasViewParentMap.TryGetValue(gameObjectUI, out var canvas))
-            {
                 _canvasViewParentMap.Remove(gameObjectUI);
-                if (canvas.transform.childCount == 1)
-                    shouldReleaseCanvas = true;
-            }
 
-            if (gameObjectUI != null)
-                Destroy(gameObjectUI);
-
-            if (shouldReleaseCanvas)
+            gameObjectUI.transform.SetParent(null);
+            Destroy(gameObjectUI);
+            
+            if (canvas != null && canvas.transform.childCount == 0)
             {
                 _canvasLayersMap.Remove(canvas.sortingOrder);
                 if (_activeCanvases.Remove(canvas))
