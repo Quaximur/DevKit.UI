@@ -203,37 +203,41 @@ namespace DevKit.UI.MVVM
         {
             visualElement.RemoveFromHierarchy();
 
-            if (_documentViewParentMap.TryGetValue(visualElement, out var document))
-            {
-                _documentViewParentMap.Remove(visualElement);
+            if (!_documentViewParentMap.TryGetValue(visualElement, out var document))
+                return;
 
-                if (document.rootVisualElement.childCount == 0)
-                {
-                    _documentLayersMap.Remove(document.panelSettings.sortingOrder);
-                    if (_activeDocuments.Remove(document))
-                        _documentPool.Release(document);
-                    else
-                        Debug.LogWarning($"<color=#FF8F5C>UIDocument repeated releasing detected</color>");
-                }
-            }
+            _documentViewParentMap.Remove(visualElement);
+
+            if (document.rootVisualElement.childCount != 0)
+                return;
+
+            _documentLayersMap.Remove(document.panelSettings.sortingOrder);
+
+            if (_activeDocuments.Remove(document))
+                _documentPool.Release(document);
+            else
+                Debug.LogWarning($"<color=#FF8F5C>UIDocument repeated releasing detected</color>");
         }
 
         void IRootUI.Detach(GameObject gameObjectUI)
         {
-            if (_canvasViewParentMap.TryGetValue(gameObjectUI, out var canvas))
-                _canvasViewParentMap.Remove(gameObjectUI);
-
             gameObjectUI.transform.SetParent(null);
             Destroy(gameObjectUI);
-            
-            if (canvas != null && canvas.transform.childCount == 0)
-            {
-                _canvasLayersMap.Remove(canvas.sortingOrder);
-                if (_activeCanvases.Remove(canvas))
-                    _canvasPool.Release(canvas);
-                else
-                    Debug.LogWarning($"<color=#FF8F5C>Canvas repeated releasing detected</color>");
-            }
+
+            if (!_canvasViewParentMap.TryGetValue(gameObjectUI, out var canvas))
+                return;
+
+            _canvasViewParentMap.Remove(gameObjectUI);
+
+            if (canvas.transform.childCount != 0)
+                return;
+
+            _canvasLayersMap.Remove(canvas.sortingOrder);
+
+            if (_activeCanvases.Remove(canvas))
+                _canvasPool.Release(canvas);
+            else
+                Debug.LogWarning($"<color=#FF8F5C>Canvas repeated releasing detected</color>");
         }
         #endregion
     }
