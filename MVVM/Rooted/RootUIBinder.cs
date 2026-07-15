@@ -221,8 +221,8 @@ namespace DevKit.UI.MVVM
 
         void IRootUI.Detach(GameObject gameObjectUI)
         {
-            gameObjectUI.transform.SetParent(null);
             Destroy(gameObjectUI);
+            gameObjectUI.transform.SetParent(null);
 
             if (!_canvasViewParentMap.TryGetValue(gameObjectUI, out var canvas))
                 return;
