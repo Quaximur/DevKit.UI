@@ -39,7 +39,6 @@ namespace DevKit.UI.MVVM
     /// Base class for all widgets using UI Toolkit for MVVM (Model-View-ViewModel) architecture. <br/>
     /// <inheritdoc/>
     /// </summary>
-    [UxmlElement]
     public abstract partial class ToolkitWidget<T> : ToolkitWidget, IView<T> where T : IViewModel
     {
         protected T ViewModel { get; private set; }
